@@ -1,6 +1,6 @@
 .PHONY: clean test appjs docker push mock
 
-IMAGE            ?= hjacobs/kube-ops-view
+IMAGE            ?= raffaelespazzoli/ocp-ops-view
 VERSION          ?= $(shell git describe --tags --always --dirty)
 TAG              ?= $(VERSION)
 GITHEAD          = $(shell git rev-parse HEAD)
