@@ -19,7 +19,7 @@ spec:
       serviceAccount: kube-ops-view
       containers:
       - name: service
-        image: raffaelespazzoli/kube-ops-view:latest
+        image: raffaelespazzoli/ocp-ops-view:0.7.1-7
         args:
         - --redis-url=redis://kube-ops-view-redis:6379
         ports:
@@ -100,6 +100,6 @@ spec:
     application: kube-ops-view
   type: ClusterIP
   ports:
-  - port: 80
+  - port: 8080
     protocol: TCP
     targetPort: 8080
