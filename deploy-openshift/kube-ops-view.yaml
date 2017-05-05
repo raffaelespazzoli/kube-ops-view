@@ -1,0 +1,105 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    application: kube-ops-view
+    version: v0.0.1
+  name: kube-ops-view
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      application: kube-ops-view
+  template:
+    metadata:
+      labels:
+        application: kube-ops-view
+        version: v0.0.1
+    spec:
+      serviceAccount: kube-ops-view
+      containers:
+      - name: service
+        image: raffaelespazzoli/kube-ops-view:latest
+        args:
+        - --redis-url=redis://kube-ops-view-redis:6379
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          timeoutSeconds: 1
+        resources:
+          limits:
+            cpu: 200m
+            memory: 100Mi
+          requests:
+            cpu: 50m
+            memory: 50Mi
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    application: kube-ops-view-redis
+    version: v0.0.1
+  name: kube-ops-view-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      application: kube-ops-view-redis
+  template:
+    metadata:
+      labels:
+        application: kube-ops-view-redis
+        version: v0.0.1
+    spec:
+      containers:
+      - name: redis
+        image: redis:3.2-alpine
+        ports:
+        - containerPort: 6379
+          protocol: TCP
+        readinessProbe:
+          tcpSocket:
+            port: 6379
+        resources:
+          limits:
+            cpu: 200m
+            memory: 100Mi
+          requests:
+            cpu: 50m
+            memory: 50Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    application: kube-ops-view-redis
+  name: kube-ops-view-redis
+spec:
+  selector:
+    application: kube-ops-view-redis
+  type: ClusterIP
+  ports:
+  - port: 6379
+    protocol: TCP
+    targetPort: 6379
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    application: kube-ops-view
+  name: kube-ops-view
+spec:
+  selector:
+    application: kube-ops-view
+  type: ClusterIP
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 8080
