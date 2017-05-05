@@ -19,7 +19,7 @@ spec:
       serviceAccount: kube-ops-view
       containers:
       - name: service
-        image: raffaelespazzoli/ocp-ops-view:0.7.1-7
+        image: raffaelespazzoli/ocp-ops-view:latest
         args:
         - --redis-url=redis://kube-ops-view-redis:6379
         ports:
