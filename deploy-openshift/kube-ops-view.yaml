@@ -57,6 +57,7 @@ spec:
         application: kube-ops-view-redis
         version: v0.0.1
     spec:
+      serviceAccount: kube-ops-view
       containers:
       - name: redis
         image: redis:3.2-alpine
