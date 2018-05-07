@@ -177,8 +177,7 @@ objects:
     authcode-client-secret: "${{KUBE_OPS_VIEW_CLIENT_SECRET}}"
 parameters:
   - name: KUBE_OPS_VIEW_APP_DOMAIN
-    description: The hostname to register for the route, leave blank for default
-    value: kube-ops-view.example.com
+    description: The hostname to register for the route (e.g. kube-ops-view.example.com), leave blank for default
     required: false
   - name: KUBE_OPS_VIEW_AUTHORIZE_URL
     description: The OAuth 2.0 authorization endpoint URL
