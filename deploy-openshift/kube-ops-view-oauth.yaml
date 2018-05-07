@@ -1,0 +1,193 @@
+kind: Template
+apiVersion: v1
+metadata:
+  name: kube-ops-view-oauth-template
+  annotations:
+    description: "Template for kube-ops-view on OpenShift with OAuth 2.0 authentication"
+objects:
+- kind: DeploymentConfig
+  apiVersion: v1
+  metadata:
+    labels:
+      app: kube-ops-view
+    name: kube-ops-view
+  spec:
+    replicas: 1
+    selector:
+      app: kube-ops-view
+      deploymentconfig: kube-ops-view
+    strategy:
+      activeDeadlineSeconds: 21600
+      rollingParams:
+        intervalSeconds: 1
+        maxSurge: 25%
+        maxUnavailable: 25%
+        timeoutSeconds: 600
+        updatePeriodSeconds: 1
+      type: Rolling
+    template:
+      metadata:
+        labels:
+          app: kube-ops-view
+          deploymentconfig: kube-ops-view
+      spec:
+        containers:
+        - env:
+          - name: REDIS_URL
+            value: redis://kube-ops-view-redis:6379
+          - name: APP_URL
+            value: "https://${KUBE_OPS_VIEW_APP_DOMAIN}"
+          - name: AUTHORIZE_URL
+            value: "${KUBE_OPS_VIEW_AUTHORIZE_URL}"
+          - name: ACCESS_TOKEN_URL
+            value: "${KUBE_OPS_VIEW_ACCESS_TOKEN_URL}"
+          - name: CREDENTIALS_DIR
+            value: /kube_ops_view_oauth
+          image: raffaelespazzoli/ocp-ops-view:latest
+          imagePullPolicy: Always
+          name: kube-ops-view
+          ports:
+          - containerPort: 8080
+            protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /health
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          resources:
+            limits:
+              cpu: 200m
+              memory: 100Mi
+            requests:
+              cpu: 50m
+              memory: 50Mi
+          volumeMounts:
+          - mountPath: /kube_ops_view_oauth
+            name: kube-ops-view-oauth
+            readOnly: true
+        restartPolicy: Always
+        serviceAccount: kube-ops-view
+        volumes:
+        - name: kube-ops-view-oauth
+          secret:
+            secretName: kube-ops-view-oauth
+    triggers:
+    - type: ConfigChange
+- kind: DeploymentConfig
+  apiVersion: v1
+  metadata:
+    labels:
+      app: kube-ops-view-redis
+    name: kube-ops-view-redis
+  spec:
+    replicas: 1
+    selector:
+      app: kube-ops-view-redis
+      deploymentconfig: kube-ops-view-redis
+    strategy:
+      activeDeadlineSeconds: 21600
+      rollingParams:
+        intervalSeconds: 1
+        maxSurge: 25%
+        maxUnavailable: 25%
+        timeoutSeconds: 600
+        updatePeriodSeconds: 1
+      type: Rolling
+    template:
+      metadata:
+        labels:
+          app: kube-ops-view-redis
+          deploymentconfig: kube-ops-view-redis
+      spec:
+        serviceAccount: kube-ops-view
+        containers:
+        - name: redis
+          image: redis:3.2-alpine
+          imagePullPolicy: Always
+          ports:
+          - containerPort: 6379
+            protocol: TCP
+          readinessProbe:
+            tcpSocket:
+              port: 6379
+          resources:
+            limits:
+              cpu: 200m
+              memory: 100Mi
+            requests:
+              cpu: 50m
+              memory: 50Mi
+    triggers:
+    - type: ConfigChange
+- kind: Route
+  apiVersion: v1
+  metadata:
+    labels:
+      app: kube-ops-view
+    name: kube-ops-view
+  spec:
+    host: "${KUBE_OPS_VIEW_APP_DOMAIN}"
+    port:
+      targetPort: 8080
+    tls:
+      insecureEdgeTerminationPolicy: Redirect
+      termination: edge
+    to:
+      kind: Service
+      name: kube-ops-view
+- kind: Service
+  apiVersion: v1
+  metadata:
+    labels:
+      app: kube-ops-view
+    name: kube-ops-view
+  spec:
+    ports:
+    - port: 8080
+      protocol: TCP
+      targetPort: 8080
+    selector:
+      app: kube-ops-view
+    type: ClusterIP
+- kind: Service
+  apiVersion: v1
+  metadata:
+    labels:
+      app: kube-ops-view-redis
+    name: kube-ops-view-redis
+  spec:
+    ports:
+    - port: 6379
+      protocol: TCP
+      targetPort: 6379
+    selector:
+      app: kube-ops-view-redis
+    type: ClusterIP
+- kind: Secret
+  apiVersion: v1
+  metadata:
+    name: kube-ops-view-oauth
+  stringData:
+    authcode-client-id: "${{KUBE_OPS_VIEW_CLIENT_ID}}"
+    authcode-client-secret: "${{KUBE_OPS_VIEW_CLIENT_SECRET}}"
+parameters:
+  - name: KUBE_OPS_VIEW_APP_DOMAIN
+    description: The hostname to register for the route (e.g. kube-ops-view.example.com), leave blank for default
+    required: false
+  - name: KUBE_OPS_VIEW_AUTHORIZE_URL
+    description: The OAuth 2.0 authorization endpoint URL
+    required: true
+  - name: KUBE_OPS_VIEW_ACCESS_TOKEN_URL
+    description: Token endpoint URL for the OAuth 2.0 Authorization Code Grant flow
+    required: true
+  - name: KUBE_OPS_VIEW_CLIENT_ID
+    description: OAuth 2.0 client ID
+    required: true
+  - name: KUBE_OPS_VIEW_CLIENT_SECRET
+    description: OAuth 2.0 client secret
+    required: true
