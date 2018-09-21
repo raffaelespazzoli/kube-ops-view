@@ -59,6 +59,14 @@ You can also try the UI with the integrated mock mode. This does not require any
 .. code-block:: bash
 
     $ docker run -it -p 8080:8080 hjacobs/kube-ops-view --mock
+    
+OS X with Docker for Mac:
+
+.. code-block:: bash
+
+    $ oc proxy --accept-hosts '.*'
+    $ # then in another terminal
+    $ docker run -it -p 8080:8080 -e CLUSTERS=http://docker.for.mac.localhost:8001 raffaelespazzoli/ocp-ops-view
 
 Installation
 ------------
