@@ -107,7 +107,7 @@ objects:
         serviceAccount: kube-ops-view
         containers:
         - name: redis
-          image: redis:3.2-alpine
+          image: registry.access.redhat.com/rhscl/redis-32-rhel7
           imagePullPolicy: Always
           ports:
           - containerPort: 6379
