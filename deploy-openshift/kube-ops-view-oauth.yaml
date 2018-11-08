@@ -107,7 +107,7 @@ objects:
         serviceAccount: kube-ops-view
         containers:
         - name: redis
-          image: redis:3.2-alpine
+          image: registry.access.redhat.com/rhscl/redis-32-rhel7
           imagePullPolicy: Always
           ports:
           - containerPort: 6379
@@ -186,8 +186,8 @@ parameters:
     description: Token endpoint URL for the OAuth 2.0 Authorization Code Grant flow
     required: true
   - name: KUBE_OPS_VIEW_CLIENT_ID
-    description: OAuth 2.0 client ID
+    description: OAuth 2.0 client ID generated and provided by the authorization server
     required: true
   - name: KUBE_OPS_VIEW_CLIENT_SECRET
-    description: OAuth 2.0 client secret
+    description: OAuth 2.0 client secret generated and provided by the authorization server
     required: true
