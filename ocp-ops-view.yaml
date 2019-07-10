@@ -1,0 +1,354 @@
+---
+# Source: kube-ops-view/charts/redis/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  labels:
+    app: redis
+    chart: redis-5.1.0
+    heritage: Tiller
+    release: kube-ops-view-stable
+  name: kube-ops-view-stable-redis
+data:
+  redis.conf: |-
+    # User-supplied configuration:
+    # maxmemory-policy volatile-lru
+  master.conf: |-
+    dir /data
+    rename-command FLUSHDB ""
+    rename-command FLUSHALL ""
+  replica.conf: |-
+    dir /data
+    rename-command FLUSHDB ""
+    rename-command FLUSHALL ""
+
+---
+# Source: kube-ops-view/charts/redis/templates/health-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  labels:
+    app: redis
+    chart: redis-5.1.0
+    heritage: Tiller
+    release: kube-ops-view-stable
+  name: kube-ops-view-stable-redis-health
+data:
+  ping_local.sh: |-
+    response=$(
+      redis-cli \
+        -h localhost \
+        -p $REDIS_PORT \
+        ping
+    )
+    if [ "$response" != "PONG" ]; then
+      echo "$response"
+      exit 1
+    fi
+  ping_master.sh: |-
+    response=$(
+      redis-cli \
+        -h $REDIS_MASTER_HOST \
+        -p $REDIS_MASTER_PORT_NUMBER \
+        ping
+    )
+    if [ "$response" != "PONG" ]; then
+      echo "$response"
+      exit 1
+    fi
+  ping_local_and_master.sh: |-
+    script_dir="$(dirname "$0")"
+    exit_status=0
+    "$script_dir/ping_local.sh" || exit_status=$?
+    "$script_dir/ping_master.sh" || exit_status=$?
+    exit $exit_status
+
+---
+# Source: kube-ops-view/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: kube-ops-view
+    chart: kube-ops-view-1.0.0
+    heritage: Tiller
+    release: kube-ops-view-stable
+  name: kube-ops-view-stable-kube-ops-view
+---
+# Source: kube-ops-view/templates/clusterrole.yaml
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRole
+metadata:
+  labels:
+    app: kube-ops-view
+    chart: kube-ops-view-1.0.0
+    heritage: Tiller
+    release: kube-ops-view-stable
+  name: kube-ops-view-stable-kube-ops-view
+rules:
+- apiGroups: [""]
+  resources: ["nodes", "pods"]
+  verbs: ["list"]
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["nodes", "pods"]
+  verbs: ["get", "list"]
+---
+# Source: kube-ops-view/templates/clusterrolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: kube-ops-view
+    chart: kube-ops-view-1.0.0
+    heritage: Tiller
+    release: kube-ops-view-stable
+  name: kube-ops-view-stable-kube-ops-view
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kube-ops-view-stable-kube-ops-view
+subjects:
+  - kind: ServiceAccount
+    name: kube-ops-view-stable-kube-ops-view
+    namespace: ocp-ops-view
+---
+# Source: kube-ops-view/charts/redis/templates/redis-master-svc.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: kube-ops-view-stable-redis-master
+  labels:
+    app: redis
+    chart: redis-5.1.0
+    release: "kube-ops-view-stable"
+    heritage: "Tiller"
+spec:
+  type: ClusterIP
+  ports:
+  - name: redis
+    port: 6379
+    targetPort: redis
+  selector:
+    app: redis
+    release: "kube-ops-view-stable"
+    role: master
+
+---
+# Source: kube-ops-view/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: kube-ops-view-stable-kube-ops-view
+  labels:
+    chart: "kube-ops-view-1.0.0"
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+  selector:
+    app: kube-ops-view-stable-kube-ops-view
+
+---
+# Source: kube-ops-view/templates/deployment.yaml
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: kube-ops-view-stable-kube-ops-view
+  labels:
+    chart: "kube-ops-view-1.0.0"
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: kube-ops-view-stable-kube-ops-view
+    spec:
+      serviceAccountName: kube-ops-view-stable-kube-ops-view
+      containers:
+      - name: kube-ops-view
+        image: "hjacobs/kube-ops-view:0.11"
+        imagePullPolicy: IfNotPresent
+        args:
+        - --redis-url=redis://kube-ops-view-stable-redis-master:6379
+        ports:
+        - containerPort: 8080
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+        resources:
+            limits:
+              cpu: 100m
+              memory: 128Mi
+            requests:
+              cpu: 80m
+              memory: 64Mi
+            
+
+---
+# Source: kube-ops-view/charts/redis/templates/redis-master-statefulset.yaml
+apiVersion: apps/v1beta2
+kind: StatefulSet
+metadata:
+  name: kube-ops-view-stable-redis-master
+  labels:
+    app: redis
+    chart: redis-5.1.0
+    release: "kube-ops-view-stable"
+    heritage: "Tiller"
+spec:
+  selector:
+    matchLabels:
+      release: "kube-ops-view-stable"
+      role: master
+      app: redis
+  serviceName: kube-ops-view-stable-redis-master
+  template:
+    metadata:
+      labels:
+        release: "kube-ops-view-stable"
+        chart: redis-5.1.0
+        role: master
+        app: redis
+      annotations:
+        checksum/health: f9f1639520fd3fa65b2d03730b1d4499491c12b52e184926b3d1e1c1f7b41b97
+        checksum/configmap: 21cd0c410758e128cbfe8bf95090865fd827c0e4c4119f085390bd2e4e6a60af
+        checksum/secret: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    spec:
+      securityContext:
+        fsGroup: 1001
+        runAsUser: 1001
+      serviceAccountName: "default"
+      containers:
+      - name: kube-ops-view-stable-redis
+        image: "docker.io/bitnami/redis:4.0.11"
+        imagePullPolicy: "Always"
+        command:
+          - /run.sh
+          
+        args:
+        - "--port"
+        - "$(REDIS_PORT)"
+        - "--protected-mode"
+        - "no"
+        - "--include"
+        - "/opt/bitnami/redis/etc/redis.conf"
+        - "--include"
+        - "/opt/bitnami/redis/etc/master.conf"
+        env:
+        - name: REDIS_REPLICATION_MODE
+          value: master
+        - name: ALLOW_EMPTY_PASSWORD
+          value: "yes"
+        - name: REDIS_PORT
+          value: "6379"
+        ports:
+        - name: redis
+          containerPort: 6379
+        livenessProbe:
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 5
+          exec:
+            command:
+            - sh
+            - -c
+            - /health/ping_local.sh
+        readinessProbe:
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 1
+          successThreshold: 1
+          failureThreshold: 5
+          exec:
+            command:
+            - sh
+            - -c
+            - /health/ping_local.sh
+        resources:
+          null
+          
+        volumeMounts:
+        - name: health
+          mountPath: /health
+        - name: redis-data
+          mountPath: /data
+          subPath: 
+        - name: config
+          mountPath: /opt/bitnami/redis/etc
+      volumes:
+      - name: health
+        configMap:
+          name: kube-ops-view-stable-redis-health
+          defaultMode: 0755
+      - name: config
+        configMap:
+          name: kube-ops-view-stable-redis
+      - name: "redis-data"
+        emptyDir: {}
+  updateStrategy:
+    type: RollingUpdate
+
+---
+# Source: kube-ops-view/templates/ingress.yaml
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: kube-ops-view-stable-kube-ops-view
+  labels:
+    app: kube-ops-view-stable-kube-ops-view
+    chart: "kube-ops-view-1.0.0"
+    release: "kube-ops-view-stable"
+    heritage: "Tiller"
+spec:
+  rules:
+    - host: ocp-host-view.local
+      http:
+        paths:
+          - path: /
+            backend:
+              serviceName: kube-ops-view-stable-kube-ops-view
+              servicePort: 80
+---
+# Source: kube-ops-view/charts/redis/templates/metrics-deployment.yaml
+
+
+---
+# Source: kube-ops-view/charts/redis/templates/metrics-prometheus.yaml
+
+---
+# Source: kube-ops-view/charts/redis/templates/metrics-svc.yaml
+
+
+---
+# Source: kube-ops-view/charts/redis/templates/networkpolicy.yaml
+
+
+---
+# Source: kube-ops-view/charts/redis/templates/redis-role.yaml
+
+---
+# Source: kube-ops-view/charts/redis/templates/redis-rolebinding.yaml
+
+---
+# Source: kube-ops-view/charts/redis/templates/redis-serviceaccount.yaml
+
+---
+# Source: kube-ops-view/charts/redis/templates/redis-slave-deployment.yaml
+
+
+---
+# Source: kube-ops-view/charts/redis/templates/redis-slave-svc.yaml
+
+
+---
+# Source: kube-ops-view/charts/redis/templates/secret.yaml
+
